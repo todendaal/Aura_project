@@ -1,0 +1,530 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+}
+
+
+
+<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title" id="myModalLabel">Modal title</h4>
+            </div>
+            <div class="modal-body">
+
+
+                <a class="custom-close"> Let us generate a new emergency</a>
+
+                <table class="table">
+                    <tr>
+                        <td>Select Client</td>
+                        <td colspan="2">
+                            <select id="ClientDrop" class="browser-default custom-select custom-select-lg mb-3">
+                                <option selected value="0">Open this select menu</option>
+                                <option value="1">Tiaan</option>
+                                <option value="2">Ruben</option>
+                            </select>
+                            <p id="pSelect" style="color:red;display:none;"><b>Please select the Client</b></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Select position by address</td>
+                        <td><input type="text" id="txtSearchAddress" /></td>
+                        <td><button type="button" class="btn btn-primary" onclick="searchAddress()">Search</button></td>
+                    </tr>
+                    <tr>
+                        <td>Select random position in South Africa</td>
+                        <td colspan="2"><button type="button" class="btn btn-primary" onclick="getRandomAddress()">Random Position</button></td>
+                    </tr>
+                </table>
+                <div>
+                    <table class="table">
+                        <tr>
+                            <td>Full Address</td>
+                            <td id="em_Address"></td>
+                        </tr>
+                        <tr>
+                            <td>Emergency Longitude</td>
+                            <td id="em_Lat"></td>
+                        </tr>
+                        <tr>
+                            <td>Emergency Latitude</td>
+                            <td id="em_Long"></td>
+                        </tr>
+                    </table>
+</div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">Continue</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+
+
+<div class="jumbotron" id="mainshow" style="display:none;">
+    <h1>Aura</h1>
+    <p class="lead">ASP.NET is a free web framework for building great Web sites and Web applications using HTML, CSS and JavaScript.</p>
+    <p><a href="https://asp.net" class="btn btn-primary btn-lg">Learn more &raquo;</a></p>
+</div>
+
+<div id="googleMap" style="width:100%;height:400px;"></div>
+
+
+@Scripts.Render("~/bundles/jqueryval")
+
+
+<script>
+
+    var map;
+    var infowindow;
+    var victimPoint = { lat: -26.191618, lng: 28.119041 };
+    var victimID = 0;
+    var EmergencyTrackers = new Array();
+    var timerRunning = false;
+    var markerItem = new Array();
+    var iw = new Array();
+    var iwCounter = 0;
+    var victimMarker;
+    var MarkerList = new Array();
+    var EmergencyID = 0;
+
+    function SaveNewEmergency() {
+        //SaveNewEmergency(int ClientID, long Lat, long Lng, string Address)
+        $("#pSelect").hide();
+        var ClientID = $("#ClientDrop").val();
+        if (ClientID != 0) {
+            $.ajax({
+                url: '/Emergency/SaveNewEmergency',
+                type: 'GET',
+                dataType: 'json',
+                contentType: 'application/json; charset=utf-8',
+                data: {
+                    ClientID: ClientID,
+                    Lat: victimPoint.lng,
+                    Lng: victimPoint.lat,
+                    Address: $("#infoAddress").html()
+                },
+                success: function (data, textStatus, xhr) {
+                    EmergencyID = data;
+                },
+                error: function (xhr, textStatus, errorThrown) {
+                    alert("get not success adding Emergency");
+                }
+            });
+        }
+        else {
+            $("#pSelect").show();
+        }
+    }
+
+
+    function clearArrays() {
+        clearAllMarkers();
+        EmergencyTrackers = [];
+        EmergencyTrackers.length = 0;
+        iw = [];
+        iw.length = 0;
+    }
+
+    function clearAllMarkers(map) {
+        for (let i = 0; i < MarkerList.length; i++) {
+            markerItem[MarkerList[i]].setMap(null);
+        }
+        markerItem.length = 0;
+        MarkerList = [];
+        MarkerList.length = 0;
+    }
+
+    function searchAddress() {
+        $("#pSelect").hide();
+        var ClientID = $("#ClientDrop").val();
+        if (ClientID != 0) {
+            clearArrays();
+            var addresstext = $("#txtSearchAddress").val();
+            var searchtext = 'https://maps.googleapis.com/maps/api/geocode/json?address=' + addresstext + '&key=AIzaSyAh6pfwgV5a784PrNNhoZph3_R1QQp18gg'
+            var geocoder;
+            geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ 'address': addresstext }, function (results, status) {
+                if (status == 'OK') {
+                    var Items = JSON.stringify(results[0].geometry.location);
+                    victimPoint.lat = results[0].geometry.location.lat();
+                    victimPoint.lng = results[0].geometry.location.lng();
+                    victimMarker.setPosition(new google.maps.LatLng(victimPoint.lat, victimPoint.lng));
+                    $("#em_Address").html(results[0].formatted_address);
+                    $("#em_Lat").html(victimPoint.lat);
+                    $("#em_Long").html(victimPoint.lng);
+                    $("#infoAddress").html(results[0].formatted_address);
+                    $("#infoLat").html(victimPoint.lat);
+                    $("#infoLon").html(victimPoint.lng);
+                    SaveNewEmergency();
+                    getData(1);//POLICE
+                    getData(2);//SECURITY
+                    map.setCenter(results[0].geometry.location);
+                } else {
+                    alert('Geocode was not successful for the following reason: ' + status);
+                }
+            });
+        }
+        else {
+            $("#pSelect").show();
+        }
+     }
+
+
+
+    function getRandomAddress() {
+        $("#pSelect").hide();
+        var ClientID = $("#ClientDrop").val();
+        if (ClientID != 0) {
+            clearArrays();
+            $.ajax({
+                url: '/Position/RandomPosition',
+                type: 'GET',
+                dataType: 'json',
+                contentType: 'application/json; charset=utf-8',
+                success: function (data, textStatus, xhr) {
+                    var myJSON = JSON.stringify(data);
+                    var latv = 0;
+                    var lonv = 0;
+                    $.each(data, function (index2, value2) {
+                        if (index2 == "Lat") { latv = value2; }
+                        if (index2 == "Lon") { lonv = value2; }
+                    });
+                    if (latv != 0 && lonv != 0) {
+                        victimPoint.lat = lonv;
+                        victimPoint.lng = latv;
+                        victimMarker.setPosition(new google.maps.LatLng(victimPoint.lat, victimPoint.lng));
+                        map.setCenter(new google.maps.LatLng(victimPoint.lat, victimPoint.lng))
+                        searchLatLng();
+                    }
+                },
+                error: function (xhr, textStatus, errorThrown) {
+                    alert("get not success");
+                }
+            });
+        }
+        else {
+            $("#pSelect").show();
+        }
+    }
+
+    function searchLatLng() {
+        var geocoder;
+        geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ 'latLng': new google.maps.LatLng(victimPoint.lat, victimPoint.lng) }, function (results, status) {
+            if (status == 'OK') {
+                $("#em_Address").html(results[0].formatted_address);
+                $("#em_Lat").html(victimPoint.lat);
+                $("#em_Long").html(victimPoint.lng);
+                $("#infoAddress").html(results[0].formatted_address);
+                $("#infoLat").html(victimPoint.lat);
+                $("#infoLon").html(victimPoint.lng);
+                SaveNewEmergency();
+                getData(1);//POLICE
+                getData(2);//SECURITY
+            } else {
+                alert('Geocode was not successful for the following reason: ' + status);
+            }
+        });
+    }
+
+
+
+
+    function myMap() {
+        var mapProp = {
+            center: new google.maps.LatLng(-26.191618, 28.119041),
+            zoom: 12,
+        };
+        infowindow = new google.maps.InfoWindow({
+            content: "<div id='divinfo'>test</div>"
+        });
+        map = new google.maps.Map(document.getElementById("googleMap"), mapProp);
+
+        victimMarker = new google.maps.Marker({
+            position: victimPoint,
+            label: {
+                color: 'orange',
+                fontWeight: 'bold',
+                text: 'VICTIM',
+            },
+            icon: {
+                labelOrigin: new google.maps.Point(11, 50),
+                url: '/icons/userA.png',
+                size: new google.maps.Size(48, 48),
+                origin: new google.maps.Point(0, 0),
+                anchor: new google.maps.Point(11, 40),
+            },
+            map: map,
+        });
+    }
+
+    
+    function addMarker(latVal, lonVal, posName, posDesc, markerid, distance, TypeID, ContactNr) {
+        const mapdata = { lat: latVal, lng: lonVal };
+        if (TypeID == 1) {
+            markerItem[markerid] = new google.maps.Marker({
+                position: mapdata,
+                label: {
+                    color: 'red',
+                    fontWeight: 'bold',
+                    text: posName + ' : POLICE',
+                },
+                icon: {
+                    labelOrigin: new google.maps.Point(11, 50),
+                    url: '/icons/policeA.png',
+                    size: new google.maps.Size(48, 48),
+                    origin: new google.maps.Point(0, 0),
+                    anchor: new google.maps.Point(11, 40),
+                },
+                map: map
+            });
+            MarkerList.push(markerid);
+            infoWindow1(markerItem[markerid], posName, markerid, distance, TypeID, ContactNr);
+        }
+        if (TypeID == 2) {
+            markerItem[markerid] = new google.maps.Marker({
+                position: mapdata,
+                label: {
+                    color: 'orange',
+                    fontWeight: 'bold',
+                    text: posName + ' : SECURITY',
+                },
+                icon: {
+                    labelOrigin: new google.maps.Point(11, 50),
+                    url: '/icons/police.png',
+                    size: new google.maps.Size(48, 48),
+                    origin: new google.maps.Point(0, 0),
+                    anchor: new google.maps.Point(11, 40),
+                },
+                map: map
+            });
+            MarkerList.push(markerid);
+            infoWindow2(markerItem[markerid], posName, markerid, distance, ContactNr);
+        }
+    }
+
+    
+
+
+
+    function infoWindow1(marker, posname, id, distance, ContactNr) {
+        var html = "<div>" + posname + "<BR>" + distance + " km<BR>" + ContactNr + "</div></p></div>";
+        iw[id] = new google.maps.InfoWindow({
+            content: html,
+            maxWidth: 350
+        });
+        iwCounter++;
+
+        marker.addListener('mouseover', function (e) {
+            iw[id].setContent(html);
+            iw[id].open(map, marker);
+        });
+        marker.addListener('mouseout', function () {
+            iw[id].close();
+        });
+    }
+
+    function infoWindow2(marker, posname, id, distance, ContactNr) {
+        //get streetname from google
+        //get time to drive from google
+        var html = "<div>" + posname + "<BR>" + distance + " km<BR>" + ContactNr + "</div></p><br>";
+        html += "<input class='btn btn-default' value='Confirm Chase' type='button' id='btnSecurity" + id + "' onclick='ConnectSecurity(" + id + ")' /></div>";
+
+        iw[id] = new google.maps.InfoWindow({
+            content: html,
+            maxWidth: 350
+        });
+        iwCounter++;
+        marker.addListener('click', function (e) {
+            iw[id].setContent(html);
+            iw[id].open(map, marker);
+        });
+        //marker.addListener('mouseout', function () {
+        //    iw[id].close();
+        //});
+    }
+
+    const SACoords = [
+        //{ lat: 25.774, lng: -80.19 },
+        //{ lat: 18.466, lng: -66.118 },
+        //{ lat: 32.321, lng: -64.757 },
+        //{ lat: 25.774, lng: -80.19 },
+        { lat: 29.3705291748047, lng: -22.1913795471191 }, { lat: 29.0874900817871, lng: -22.2241706848145 }, { lat: 28.9605503082275, lng: -22.3133392333984 }, { lat: 28.9658203125, lng: -22.3863906860352 }, { lat: 28.9177703857422, lng: -22.4583396911621 }, { lat: 28.6344394683838, lng: -22.5633392333984 }, { lat: 28.4397106170654, lng: -22.5736198425293 }, { lat: 28.1841602325439, lng: -22.6847305297852 }, { lat: 28.1491603851318, lng: -22.7800006866455 }, { lat: 28.0427703857422, lng: -22.8411102294922 }, { lat: 28.0522193908691, lng: -22.8813896179199 }, { lat: 28.0244407653809, lng: -22.9244499206543 }, { lat: 27.9386005401611, lng: -22.9555606842041 }, { lat: 27.9283294677734, lng: -23.0580596923828 }, { lat: 27.8174896240234, lng: -23.1091709136963 }, { lat: 27.7861099243164, lng: -23.1652793884277 }, { lat: 27.736930847168, lng: -23.2299995422363 }, { lat: 27.6013793945313, lng: -23.2202796936035 }, { lat: 27.5727691650391, lng: -23.2894496917725 }, { lat: 27.5205497741699, lng: -23.3836097717285 }, { lat: 27.3958206176758, lng: -23.3908405303955 }, { lat: 27.1027698516846, lng: -23.5766696929932 }, { lat: 27.0672092437744, lng: -23.6608295440674 }, { lat: 27.0324897766113, lng: -23.6547203063965 }, { lat: 26.9991607666016, lng: -23.648609161377 }, { lat: 26.9594306945801, lng: -23.7536201477051 }, { lat: 26.8452701568604, lng: -24.2644500732422 }, { lat: 26.5549907684326, lng: -24.436939239502 }, { lat: 26.4647102355957, lng: -24.5805606842041 }, { lat: 26.4028797149658, lng: -24.6304397583008 }, { lat: 26.3599891662598, lng: -24.6188907623291 }, { lat: 25.8659496307373, lng: -24.7386608123779 }, { lat: 25.8322105407715, lng: -25.0280609130859 }, { lat: 25.5870895385742, lng: -25.6210403442383 }, { lat: 25.3863792419434, lng: -25.7463893890381 }, { lat: 25.1522102355957, lng: -25.7622203826904 }, { lat: 25.0369396209717, lng: -25.728609085083 }, { lat: 24.8077697753906, lng: -25.8308391571045 }, { lat: 24.5044403076172, lng: -25.7630596160889 }, { lat: 24.4461002349854, lng: -25.735559463501 }, { lat: 24.3933296203613, lng: -25.7627792358399 }, { lat: 24.2661094665527, lng: -25.6966705322266 }, { lat: 24.1502704620361, lng: -25.6216697692871 }, { lat: 24.0002708435059, lng: -25.6588897705078 }, { lat: 24.0072193145752, lng: -25.6225109100342 }, { lat: 23.8441600799561, lng: -25.5741691589356 }, { lat: 23.7344398498535, lng: -25.4622192382813 }, { lat: 23.4963798522949, lng: -25.333890914917 }, { lat: 23.4583206176758, lng: -25.2783393859863 }, { lat: 23.1047096252441, lng: -25.3002796173096 }, { lat: 22.9263801574707, lng: -25.3838901519775 }, { lat: 22.8130493164063, lng: -25.5638904571533 }, { lat: 22.8188800811768, lng: -25.6680603027344 }, { lat: 22.7302703857422, lng: -25.7888908386231 }, { lat: 22.7691593170166, lng: -25.8230590820313 }, { lat: 22.7224903106689, lng: -25.9372291564941 }, { lat: 22.7127704620361, lng: -25.9991607666016 }, { lat: 22.4619407653809, lng: -26.2150001525879 }, { lat: 22.1794395446777, lng: -26.4277801513672 }, { lat: 22.0672092437744, lng: -26.6147308349609 }, { lat: 21.8988800048828, lng: -26.6683292388916 }, { lat: 21.7913799285889, lng: -26.6716709136963 }, { lat: 21.7599906921387, lng: -26.6919498443604 }, { lat: 21.7786102294922, lng: -26.7708396911621 }, { lat: 21.6930503845215, lng: -26.8530502319336 }, { lat: 21.523609161377, lng: -26.8533401489258 }, { lat: 21.3486003875732, lng: -26.8274993896485 }, { lat: 21.1441593170166, lng: -26.8666706085205 }, { lat: 20.8972091674805, lng: -26.7947292327881 }, { lat: 20.6923408508301, lng: -26.8946800231934 }, { lat: 20.6369400024414, lng: -26.812780380249 }, { lat: 20.6113796234131, lng: -26.4491691589356 }, { lat: 20.6933307647705, lng: -26.3861198425293 }, { lat: 20.8608207702637, lng: -26.1336097717285 }, { lat: 20.7566604614258, lng: -25.7819499969482 }, { lat: 20.6797103881836, lng: -25.6794490814209 }, { lat: 20.6877708435059, lng: -25.5788898468018 }, { lat: 20.6319408416748, lng: -25.5188903808594 }, { lat: 20.6733207702637, lng: -25.4591598510742 }, { lat: 20.555549621582, lng: -25.3799991607666 }, { lat: 20.3899898529053, lng: -25.0369491577149 }, { lat: 20.1749897003174, lng: -24.8922290802002 }, { lat: 20.0014095306396, lng: -24.7636299133301 }, { lat: 20.0002708435059, lng: -26.1194496154785 }, { lat: 19.9986000061035, lng: -27.4719505310059 }, { lat: 19.9972496032715, lng: -28.4263591766357 }, { lat: 19.5694408416748, lng: -28.5263900756836 }, { lat: 19.4663791656494, lng: -28.6997203826904 }, { lat: 19.2741603851318, lng: -28.7319507598877 }, { lat: 19.2391605377197, lng: -28.7988891601563 }, { lat: 19.2949905395508, lng: -28.8936100006104 }, { lat: 19.1294403076172, lng: -28.9608306884766 }, { lat: 19.0094394683838, lng: -28.9322204589844 }, { lat: 18.9577693939209, lng: -28.8680591583252 }, { lat: 18.6399898529053, lng: -28.8469505310059 }, { lat: 18.1835994720459, lng: -28.9088897705078 }, { lat: 17.7085990905762, lng: -28.7516708374024 }, { lat: 17.6555500030518, lng: -28.7758407592773 }, { lat: 17.6044406890869, lng: -28.756950378418 }, { lat: 17.5952701568604, lng: -28.6933403015137 }, { lat: 17.4094390869141, lng: -28.7163906097412 }, { lat: 17.3599891662598, lng: -28.5163993835449 }, { lat: 17.3219394683838, lng: -28.4677791595459 }, { lat: 17.3880500793457, lng: -28.4230499267578 }, { lat: 17.3991603851318, lng: -28.3477802276611 }, { lat: 17.3488807678223, lng: -28.2366695404053 }, { lat: 17.2613792419434, lng: -28.2369403839111 }, { lat: 17.2216606140137, lng: -28.2447204589844 }, { lat: 17.1841602325439, lng: -28.2024993896485 }, { lat: 17.1941604614258, lng: -28.1213893890381 }, { lat: 17.0949897766113, lng: -28.0363903045654 }, { lat: 16.9174900054932, lng: -28.0638904571533 }, { lat: 16.8816604614258, lng: -28.1397209167481 }, { lat: 16.8827705383301, lng: -28.1769504547119 }, { lat: 16.8386096954346, lng: -28.1686096191406 }, { lat: 16.8516597747803, lng: -28.2122192382813 }, { lat: 16.8072204589844, lng: -28.2183303833008 }, { lat: 16.8244400024414, lng: -28.2611198425293 }, { lat: 16.773609161377, lng: -28.2594509124756 }, { lat: 16.7788791656494, lng: -28.3247299194336 }, { lat: 16.8033294677734, lng: -28.3644504547119 }, { lat: 16.7277698516846, lng: -28.4961109161377 }, { lat: 16.6780490875244, lng: -28.4605598449707 }, { lat: 16.4830207824707, lng: -28.5803394317627 }, { lat: 16.4697208404541, lng: -28.6302795410156 }, { lat: 16.5683307647705, lng: -28.7238998413086 }, { lat: 16.6038799285889, lng: -28.8666706085205 }, { lat: 16.725549697876, lng: -28.9802799224854 }, { lat: 16.7536106109619, lng: -29.0419502258301 }, { lat: 16.8152694702148, lng: -29.0850105285645 }, { lat: 16.8836097717285, lng: -29.3016700744629 }, { lat: 16.999439239502, lng: -29.5150108337402 }, { lat: 17.1655502319336, lng: -30.0169506072998 }, { lat: 17.3149890899658, lng: -30.4027805328369 }, { lat: 17.5652694702148, lng: -30.8358306884766 }, { lat: 17.8533306121826, lng: -31.253059387207 }, { lat: 18.0838794708252, lng: -31.5594501495361 }, { lat: 18.2147197723389, lng: -31.7272300720215 }, { lat: 18.3416595458984, lng: -32.2414016723633 }, { lat: 18.333610534668, lng: -32.4911193847656 }, { lat: 18.2922191619873, lng: -32.6244583129883 }, { lat: 18.1319408416748, lng: -32.7780609130859 }, { lat: 18.0649890899658, lng: -32.781120300293 }, { lat: 17.9741592407227, lng: -32.6994590759277 }, { lat: 17.9024906158447, lng: -32.7333488464355 }, { lat: 17.9002799987793, lng: -32.7930717468262 }, { lat: 17.8452701568604, lng: -32.8202896118164 }, { lat: 17.8930492401123, lng: -33.031120300293 }, { lat: 17.9138793945313, lng: -33.0480613708496 }, { lat: 17.9577693939209, lng: -33.0052909851074 }, { lat: 17.996940612793, lng: -33.0025100708008 }, { lat: 18.037769317627, lng: -33.0372200012207 }, { lat: 18.0372200012207, lng: -33.1019515991211 }, { lat: 18.1277694702148, lng: -33.1772308349609 }, { lat: 18.1197204589844, lng: -33.2044410705566 }, { lat: 18.0133304595947, lng: -33.1164016723633 }, { lat: 17.9661102294922, lng: -33.0980682373047 }, { lat: 17.9672203063965, lng: -33.1347312927246 }, { lat: 18.1155490875244, lng: -33.2583389282227 }, { lat: 18.1480503082275, lng: -33.3561210632324 }, { lat: 18.2947196960449, lng: -33.4661293029785 }, { lat: 18.4872207641602, lng: -33.8477783203125 }, { lat: 18.4825000762939, lng: -33.8947296142578 }, { lat: 18.3727703094482, lng: -33.9208488464355 }, { lat: 18.3097190856934, lng: -34.149169921875 }, { lat: 18.4902992248535, lng: -34.348518371582 }, { lat: 18.4719390869141, lng: -34.2566795349121 }, { lat: 18.4402694702148, lng: -34.146671295166 }, { lat: 18.4880504608154, lng: -34.0977897644043 }, { lat: 18.6019401550293, lng: -34.0736198425293 }, { lat: 18.7599906921387, lng: -34.0788993835449 }, { lat: 18.8133296966553, lng: -34.0969505310059 }, { lat: 18.8552703857422, lng: -34.1561088562012 }, { lat: 18.8152694702148, lng: -34.1841697692871 }, { lat: 18.8452701568604, lng: -34.2449989318848 }, { lat: 18.8038806915283, lng: -34.3555717468262 }, { lat: 18.843879699707, lng: -34.385570526123 }, { lat: 19.0388793945313, lng: -34.3438987731934 }, { lat: 19.0833301544189, lng: -34.3463897705078 }, { lat: 19.1316604614258, lng: -34.2975006103516 }, { lat: 19.1238803863525, lng: -34.3430595397949 }, { lat: 19.0833301544189, lng: -34.36083984375 }, { lat: 19.1913795471191, lng: -34.4238891601563 }, { lat: 19.2819404602051, lng: -34.4097290039063 }, { lat: 19.3575000762939, lng: -34.5002784729004 }, { lat: 19.3222198486328, lng: -34.5933418273926 }, { lat: 19.7613792419434, lng: -34.7597312927246 }, { lat: 19.857780456543, lng: -34.752498626709 }, { lat: 19.9650001525879, lng: -34.814998626709 }, { lat: 20.0522193908691, lng: -34.807788848877 }, { lat: 20.0549907684326, lng: -34.752498626709 }, { lat: 20.1733303070068, lng: -34.6800003051758 }, { lat: 20.3874893188477, lng: -34.5594596862793 }, { lat: 20.4602699279785, lng: -34.4822196960449 }, { lat: 20.6622200012207, lng: -34.4408416748047 }, { lat: 20.8388805389404, lng: -34.4652900695801 }, { lat: 20.8647193908691, lng: -34.4541816711426 }, { lat: 20.850269317627, lng: -34.4125099182129 }, { lat: 20.889440536499, lng: -34.370288848877 }, { lat: 21.0627708435059, lng: -34.3638916015625 }, { lat: 21.2872200012207, lng: -34.4333381652832 }, { lat: 21.5283298492432, lng: -34.3525085449219 }, { lat: 21.7222194671631, lng: -34.3975105285645 }, { lat: 21.8924903869629, lng: -34.3419609069824 }, { lat: 21.9455509185791, lng: -34.2283515930176 }, { lat: 22.1491603851318, lng: -34.1775093078613 }, { lat: 22.1116600036621, lng: -34.1608390808105 }, { lat: 22.138879776001, lng: -34.1005592346191 }, { lat: 22.2952709197998, lng: -34.0539016723633 }, { lat: 22.4710998535156, lng: -34.0569496154785 }, { lat: 22.5658302307129, lng: -33.9958305358887 }, { lat: 22.7699909210205, lng: -34.0355606079102 }, { lat: 22.728609085083, lng: -33.9827919006348 }, { lat: 22.8066596984863, lng: -33.9963989257813 }, { lat: 22.7833309173584, lng: -34.0111198425293 }, { lat: 22.8127708435059, lng: -34.0480613708496 }, { lat: 23.0416603088379, lng: -34.0900001525879 }, { lat: 23.0388793945313, lng: -34.0422286987305 }, { lat: 23.0608291625977, lng: -34.0825119018555 }, { lat: 23.4061107635498, lng: -34.1113891601563 }, { lat: 23.3658294677735, lng: -34.0927810668945 }, { lat: 23.3727703094482, lng: -34.0444602966309 }, { lat: 23.5391597747803, lng: -33.9919509887695 }, { lat: 23.9255504608154, lng: -34.0291709899902 }, { lat: 24.5536003112793, lng: -34.172779083252 }, { lat: 24.8330497741699, lng: -34.2058296203613 }, { lat: 24.8369407653809, lng: -34.1544609069824 }, { lat: 24.9202709197998, lng: -34.0027885437012 }, { lat: 25.0605506896973, lng: -33.9625091552734 }, { lat: 25.2366600036621, lng: -33.9736213684082 }, { lat: 25.6200008392334, lng: -34.0477905273438 }, { lat: 25.7054004669189, lng: -34.0265884399414 }, { lat: 25.6174907684326, lng: -33.9422187805176 }, { lat: 25.6285991668701, lng: -33.8513984680176 }, { lat: 25.7199897766113, lng: -33.7700004577637 }, { lat: 25.9561004638672, lng: -33.7119483947754 }, { lat: 26.2102699279785, lng: -33.740291595459 }, { lat: 26.4480495452881, lng: -33.7744483947754 }, { lat: 26.9963798522949, lng: -33.5691795349121 }, { lat: 27.4666595458984, lng: -33.2955703735352 }, { lat: 27.9105491638184, lng: -33.0155601501465 }, { lat: 28.0916595458985, lng: -32.8866806030273 }, { lat: 28.1216602325439, lng: -32.8175086975098 }, { lat: 28.537769317627, lng: -32.5741806030273 }, { lat: 28.7791595458984, lng: -32.3419609069824 }, { lat: 29.0538806915283, lng: -32.1013984680176 }, { lat: 29.3972206115723, lng: -31.7319507598877 }, { lat: 29.4024906158447, lng: -31.6886196136475 }, { lat: 29.624719619751, lng: -31.5841693878174 }, { lat: 29.7658290863037, lng: -31.444450378418 }, { lat: 29.9791603088379, lng: -31.3186092376709 }, { lat: 30.3075008392334, lng: -30.9430599212646 }, { lat: 30.6027698516846, lng: -30.5302791595459 }, { lat: 30.8611106872559, lng: -30.089729309082 }, { lat: 31.0662593841553, lng: -29.8820991516113 }, { lat: 31.0027694702148, lng: -29.9036197662354 }, { lat: 31.0124893188477, lng: -29.8680591583252 }, { lat: 31.055549621582, lng: -29.8689002990723 }, { lat: 31.0427703857422, lng: -29.8302803039551 }, { lat: 31.2458305358887, lng: -29.4916706085205 }, { lat: 31.5897197723389, lng: -29.1297302246094 }, { lat: 31.7674903869629, lng: -28.9277801513672 }, { lat: 31.8424892425537, lng: -28.940559387207 }, { lat: 31.9966602325439, lng: -28.8783397674561 }, { lat: 32.0688781738281, lng: -28.8177795410156 }, { lat: 32.0324897766113, lng: -28.8233394622803 }, { lat: 31.9958305358887, lng: -28.8202800750732 }, { lat: 31.9924907684326, lng: -28.7941703796387 }, { lat: 32.0866508483887, lng: -28.79833984375 }, { lat: 32.3716583251953, lng: -28.5561199188232 }, { lat: 32.4241600036621, lng: -28.4408397674561 }, { lat: 32.4605407714844, lng: -28.3130607604981 }, { lat: 32.5452690124512, lng: -28.1841697692871 }, { lat: 32.6433181762695, lng: -27.6355590820313 }, { lat: 32.8263816833496, lng: -27.1433391571045 }, { lat: 32.8930892944336, lng: -26.8464393615723 }, { lat: 32.3330497741699, lng: -26.860279083252 }, { lat: 32.134220123291, lng: -26.8405704498291 }, { lat: 32.0069389343262, lng: -26.8086204528809 }, { lat: 31.9585990905762, lng: -27.1127796173096 }, { lat: 31.9836006164551, lng: -27.3166694641113 }, { lat: 31.5174903869629, lng: -27.3130607604981 }, { lat: 31.1616592407227, lng: -27.2030506134033 }, { lat: 30.9830493927002, lng: -27.0294494628906 }, { lat: 30.8994407653809, lng: -26.7719497680664 }, { lat: 30.8188800811768, lng: -26.8105602264404 }, { lat: 30.8036003112793, lng: -26.7024993896485 }, { lat: 30.8022193908691, lng: -26.4622192382813 }, { lat: 31.0638809204102, lng: -26.0913906097412 }, { lat: 31.1283302307129, lng: -25.9138908386231 }, { lat: 31.3205509185791, lng: -25.7552795410156 }, { lat: 31.4216594696045, lng: -25.7283401489258 }, { lat: 31.8780498504639, lng: -25.9955596923828 }, { lat: 31.9677391052246, lng: -25.958179473877 }, { lat: 31.9194393157959, lng: -25.8141708374023 }, { lat: 32.0199813842773, lng: -25.6502799987793 }, { lat: 31.9883193969727, lng: -25.5180606842041 }, { lat: 32.0185890197754, lng: -25.0349998474121 }, { lat: 32.0161018371582, lng: -24.4594497680664 }, { lat: 31.8858299255371, lng: -24.1711196899414 }, { lat: 31.8763809204102, lng: -23.9274997711182 }, { lat: 31.7697105407715, lng: -23.8563899993896 }, { lat: 31.6835994720459, lng: -23.6136207580566 }, { lat: 31.5508308410645, lng: -23.4766693115235 }, { lat: 31.5616607666016, lng: -23.1866703033447 }, { lat: 31.2976303100586, lng: -22.4161396026611 }, { lat: 31.1558303833008, lng: -22.3216705322266 }, { lat: 30.8669395446777, lng: -22.2961196899414 }, { lat: 30.2949905395508, lng: -22.3433399200439 }, { lat: 30.2311000823975, lng: -22.2922306060791 }, { lat: 30.1330509185791, lng: -22.3005599975586 }, { lat: 29.7674903869629, lng: -22.1361103057861 }, { lat: 29.4508209228516, lng: -22.1633396148682 }, { lat: 29.3705291748047, lng: -22.1913795471191 },
+    ];
+
+
+
+    function loadKMLMap() {
+        const SABoundary = new google.maps.Polygon({
+            paths: SACoords,
+            strokeColor: "#FF0000",
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: "#FF0000",
+            fillOpacity: 0.35,
+        });
+        SABoundary.setMap(map);
+
+        //var kmlLayer = new google.maps.KmlLayer();
+        //var src = '/Data/sa2.kml';
+        //var kmlLayer = new google.maps.KmlLayer(src, {
+        //    suppressInfoWindows: true,
+        //    preserveViewport: false,
+        //    map: map
+        //});
+    }
+
+
+
+    function getData(TypeID) {
+        $.ajax({
+            url: '/Position/getPositions',
+            type: 'GET',
+            dataType: 'json',
+            contentType: 'application/json; charset=utf-8',
+            data: {
+                TypeID: TypeID,
+                lat: victimPoint.lat,
+                lon: victimPoint.lng
+            },
+            success: function (data, textStatus, xhr) {
+                var myJSON = JSON.stringify(data);
+                var latv = 0;
+                var lonv = 0;
+                var posName = ""; var posDesc = ""; var mid = 0;
+                var distance = 0;
+                var contactNR = "";
+
+                $.each(data, function (index, value) {
+                    $.each(value, function (index2, value2) {
+                        if (index2 == "Lat") { latv = value2; }
+                        if (index2 == "Lon") { lonv = value2; }
+                        if (index2 == "Name") { posName = value2; }
+                        if (index2 == "Description") { posDesc = value2; }
+                        if (index2 == "ID") { mid = value2; }
+                        if (index2 == "Distance") { distance = value2.toFixed(2); }
+                        if (index2 == "ContactNr") { contactNR = "Tell: " + value2; }
+                    });
+                    if (latv != 0 && lonv != 0 && posName != "" && mid != 0 && distance != 0) {
+                        addMarker(lonv, latv, posName, posDesc, mid, distance, TypeID, contactNR);
+                        latv = 0; lonv = 0; mid = 0; posDesc = "";
+                    }
+                });
+
+                var senddata = 0;
+            },
+            error: function (xhr, textStatus, errorThrown) {
+                //alert("get not success");
+            }
+        });
+    }
+
+
+
+    $(document).ready(function () {
+        //loadKMLMap();
+        //getData(1);//POLICE
+        //getData(2);//SECURITY
+    })
+
+
+    function ConnectSecurity(SecurityID) {
+        //Connect the security to the emergency
+        if (!EmergencyTrackers.includes(SecurityID)) {
+            EmergencyTrackers.push(SecurityID);
+            //Change the burron
+            var btnID = "#btnSecurity" + SecurityID;
+            $(btnID).hide();
+            moveChasers();
+
+            if (timerRunning == false) {
+                timerRunning = true;
+                setInterval(moveChasers, 4000);
+            }
+        }
+    }
+
+    function moveChasers() {
+        var ChasersString = EmergencyTrackers.toString();
+        //send chaser string to be moved
+        for (let i = 0; i < EmergencyTrackers.length; i++) {
+            $.ajax({
+                url: '/Position/moveChaser',
+                type: 'GET',
+                dataType: 'json',
+                contentType: 'application/json; charset=utf-8',
+                data: {
+                    SecurityID: EmergencyTrackers[i],
+                    EmergencyID: EmergencyID
+                },
+                success: function (data, textStatus, xhr) {
+                    var myJSON = JSON.stringify(data);
+                    var latv = 0;
+                    var lonv = 0;
+                    var posName = ""; var posDesc = ""; var mid = 0;
+                    var distance = 0;
+
+                    $.each(data, function (index2, value2) {
+                        if (index2 == "Lat") { latv = value2; }
+                        if (index2 == "Lon") { lonv = value2; }
+                        if (index2 == "Name") { posName = value2; }
+                        if (index2 == "Description") { posDesc = value2; }
+                        if (index2 == "ID") { mid = value2; }
+                        if (index2 == "Distance") { distance = value2.toFixed(2); }
+                    });
+                    if (latv != 0 && lonv != 0 && posName != "" && mid != 0 && distance != 0) {
+                        markerItem[EmergencyTrackers[i]].setPosition(new google.maps.LatLng(lonv, latv));
+                        latv = 0; lonv = 0; mid = 0; posDesc = "";
+
+                        var html = "<div>" + posName + "<BR>" + distance + " km</div></p><br>";
+                        html += "<input class='btn btn-default' value='Stop Chasing!' type='button' id='btnSecurity" + EmergencyTrackers[i] + "' onclick='DisConnectSecurity(" + EmergencyTrackers[i] + ")' /></div>";
+
+                        iw[EmergencyTrackers[i]].setContent(html);
+                    }
+                },
+                error: function (xhr, textStatus, errorThrown) {
+                    //alert("get not success");
+                }
+            });
+        }
+    }
+</script>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAh6pfwgV5a784PrNNhoZph3_R1QQp18gg&callback=myMap"></script>
+
+
+<div class="row" style="display:block;">
+    <div class="col-md-6">
+        <h2>Emergency</h2>
+        <p>
+            <button class="btn btn-primary btn-lg" data-toggle="modal" data-target="#myModal">
+                Generate new emergency
+            </button>
+        </p>
+    </div>
+    <div class="col-md-6">
+        <h2>Current Emergency</h2>
+        <p>
+            <table class="table">
+                <tr>
+                    <td>Current Address</td>
+                    <td id="infoAddress"></td>
+                </tr>
+                <tr>
+                    <td>Current Long</td>
+                    <td id="infoLon"></td>
+                </tr>
+                <tr>
+                    <td>Current Lat</td>
+                    <td id="infoLat"></td>
+                </tr>
+            </table>
+        </p>
+    </div>
+</div>
+
