@@ -2,14 +2,48 @@
     ViewBag.Title = "Home Page";
 }
 
+<style>
+    div.scroll {
+        background-color: #fed9ff;
+        width: 600px;
+        height: 150px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        text-align: center;
+        padding: 20px;
+    }
+</style>
 
+
+<div class="modal fade" id="msgModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title" id="myModalLabel">Messages</h4>
+            </div>
+            <div class="modal-body scroll" id="divMessages" style="height:400px;">
+                <div class="alert alert-danger" role="alert">
+                    <p>Please fill in all of the fields so we can best respond to your query.</p>
+                </div>
+
+                <div class="alert alert-success" role="alert">
+                    <p>Thank you. Your query has successfully been sent. We'll be in touch shortly.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">Continue</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
 
 <div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                <h4 class="modal-title" id="myModalLabel">Modal title</h4>
+                <h4 class="modal-title" id="myModalLabel">New Emergency</h4>
             </div>
             <div class="modal-body">
 
@@ -53,7 +87,7 @@
                             <td id="em_Long"></td>
                         </tr>
                     </table>
-</div>
+                </div>
 
             </div>
             <div class="modal-footer">
@@ -91,6 +125,66 @@
     var victimMarker;
     var MarkerList = new Array();
     var EmergencyID = 0;
+
+    function getMessageList() {
+        $.ajax({
+            url: 'Message/getMessages',
+            type: 'GET',
+            dataType: 'json',
+            contentType: 'application/json; charset=utf-8',
+            data: {
+                EmergencyID: EmergencyID
+            },
+            success: function (data, textStatus, xhr) {
+                var myJSON = JSON.stringify(data);
+                var msg = "";
+                var msgdate = "";
+                var msgtypeid = 0;
+                var msg_html = "";
+
+                $.each(data, function (index, value) {
+                    $.each(value, function (index2, value2) {
+                        if (index2 == "MessageTypeID") { msgtypeid = value2; }
+                        if (index2 == "MessageDate") { msgdate = value2; }
+                        if (index2 == "Message") { msg = value2; }
+                    });
+                    if (msgtypeid != 0 && msgdate != "" && msg != "") {
+                        msg_html += "<div class='alert alert-danger' role='alert'><p>";
+                        msg_html += msg;
+                        msg_html += "</p></div>"
+                    }
+                });
+
+                $("#divMessages").html(msg_html);
+
+                var senddata = 0;
+            },
+            error: function (xhr, textStatus, errorThrown) {
+                //alert("get not success");
+            }
+        });
+    }
+
+    function SaveMessage(Msg) {
+        $.ajax({
+            url: 'Message/AddMessage',
+            type: 'GET',
+            dataType: 'json',
+            contentType: 'application/json; charset=utf-8',
+            data: {
+                EmergencyID: EmergencyID,
+                MessageTypeID: 1,
+                Message: Msg
+            },
+            success: function (data, textStatus, xhr) {
+                //
+            },
+            error: function (xhr, textStatus, errorThrown) {
+                //alert("get not success adding Messages");
+            }
+        });
+        $("#btnMSG").show();
+    }
 
     function SaveNewEmergency() {
         //SaveNewEmergency(int ClientID, long Lat, long Lng, string Address)
@@ -172,7 +266,7 @@
         else {
             $("#pSelect").show();
         }
-     }
+    }
 
 
 
@@ -263,7 +357,7 @@
         });
     }
 
-    
+
     function addMarker(latVal, lonVal, posName, posDesc, markerid, distance, TypeID, ContactNr) {
         const mapdata = { lat: latVal, lng: lonVal };
         if (TypeID == 1) {
@@ -284,7 +378,8 @@
                 map: map
             });
             MarkerList.push(markerid);
-            infoWindow1(markerItem[markerid], posName, markerid, distance, TypeID, ContactNr);
+            infoWindow1(markerItem[markerid], posName, markerid, distance, ContactNr);
+            SaveMessage("Police Station " + posName + " added to list and is " + distance + "km away from you");
         }
         if (TypeID == 2) {
             markerItem[markerid] = new google.maps.Marker({
@@ -305,15 +400,16 @@
             });
             MarkerList.push(markerid);
             infoWindow2(markerItem[markerid], posName, markerid, distance, ContactNr);
+            SaveMessage("Security " + posName + " added to list and is " + distance + "km away from you");
         }
     }
 
-    
 
 
 
-    function infoWindow1(marker, posname, id, distance, ContactNr) {
-        var html = "<div>" + posname + "<BR>" + distance + " km<BR>" + ContactNr + "</div></p></div>";
+
+    function infoWindow1(marker, posname, id, distance, ContactNumber) {
+        var html = "<div>" + posname + "<BR>" + distance + " km<BR>Tel: " + ContactNumber + "</div></p></div>";
         iw[id] = new google.maps.InfoWindow({
             content: html,
             maxWidth: 350
@@ -332,7 +428,7 @@
     function infoWindow2(marker, posname, id, distance, ContactNr) {
         //get streetname from google
         //get time to drive from google
-        var html = "<div>" + posname + "<BR>" + distance + " km<BR>" + ContactNr + "</div></p><br>";
+        var html = "<div>" + posname + "<BR>" + distance + " km<BR>Tel: " + ContactNr + "</div></p><br>";
         html += "<input class='btn btn-default' value='Confirm Chase' type='button' id='btnSecurity" + id + "' onclick='ConnectSecurity(" + id + ")' /></div>";
 
         iw[id] = new google.maps.InfoWindow({
@@ -408,9 +504,9 @@
                         if (index2 == "Description") { posDesc = value2; }
                         if (index2 == "ID") { mid = value2; }
                         if (index2 == "Distance") { distance = value2.toFixed(2); }
-                        if (index2 == "ContactNr") { contactNR = "Tell: " + value2; }
+                        if (index2 == "ContactNr") { contactNR = value2; }
                     });
-                    if (latv != 0 && lonv != 0 && posName != "" && mid != 0 && distance != 0) {
+                    if (latv != 0 && lonv != 0 && posName != "" && mid != 0 && distance != 0 && contactNR != "") {
                         addMarker(lonv, latv, posName, posDesc, mid, distance, TypeID, contactNR);
                         latv = 0; lonv = 0; mid = 0; posDesc = "";
                     }
@@ -441,11 +537,22 @@
             var btnID = "#btnSecurity" + SecurityID;
             $(btnID).hide();
             moveChasers();
+            SaveMessage("Security Service man has excepted your call");
 
             if (timerRunning == false) {
                 timerRunning = true;
                 setInterval(moveChasers, 4000);
             }
+        }
+    }
+
+    function DisConnectSecurity(SecurityID) {
+        const index = EmergencyTrackers.indexOf(SecurityID);
+        if (index > -1) {
+            EmergencyTrackers.splice(index, 1);
+            EmergencyTrackers.splice(index, 1);
+            var itmName = "#btnStopSecurity" + SecurityID;
+            $(itmName).hide();
         }
     }
 
@@ -476,15 +583,18 @@
                         if (index2 == "Description") { posDesc = value2; }
                         if (index2 == "ID") { mid = value2; }
                         if (index2 == "Distance") { distance = value2.toFixed(2); }
+                        if (index2 == "ContactNr") { contactNR = value2; }
                     });
                     if (latv != 0 && lonv != 0 && posName != "" && mid != 0 && distance != 0) {
                         markerItem[EmergencyTrackers[i]].setPosition(new google.maps.LatLng(lonv, latv));
                         latv = 0; lonv = 0; mid = 0; posDesc = "";
 
-                        var html = "<div>" + posName + "<BR>" + distance + " km</div></p><br>";
-                        html += "<input class='btn btn-default' value='Stop Chasing!' type='button' id='btnSecurity" + EmergencyTrackers[i] + "' onclick='DisConnectSecurity(" + EmergencyTrackers[i] + ")' /></div>";
+                        var html = "<div>" + posName + "<BR>" + distance + " km</div><BR>Tel: " + contactNR + "</p><br>";
+                        html += "<input class='btn btn-default' value='Stop Chasing!' type='button' id='btnStopSecurity" + EmergencyTrackers[i] + "' onclick='DisConnectSecurity(" + EmergencyTrackers[i] + ")' /></div>";
 
                         iw[EmergencyTrackers[i]].setContent(html);
+
+                        SaveMessage("Security Service man " + posName + " is on the way and " + distance + "km away. Contact him on " + contactNR);
                     }
                 },
                 error: function (xhr, textStatus, errorThrown) {
@@ -504,6 +614,12 @@
         <p>
             <button class="btn btn-primary btn-lg" data-toggle="modal" data-target="#myModal">
                 Generate new emergency
+            </button>
+
+        </p>
+        <p>
+            <button id="btnMSG" style="display:none;" class="btn btn-primary btn-lg" data-toggle="modal" data-target="#msgModal" onclick="getMessageList()">
+                View Message
             </button>
         </p>
     </div>
